@@ -1,23 +1,19 @@
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entities/product.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { PaginationDto } from 'src/common/dtos/pagination.dto';
+import { validate as isUUID } from 'uuid';
+import { ErrorHandler } from 'src/common/errors/error.handler';
 
 @Injectable()
 export class ProductsService {
-  private readonly logger = new Logger('ProductsService');
-
   constructor(
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    private readonly errorHandler: ErrorHandler,
   ) {}
 
   async create(createProductDto: CreateProductDto) {
@@ -27,30 +23,59 @@ export class ProductsService {
 
       return product;
     } catch (error) {
-      this.handleDBError(error);
+      this.errorHandler.handleError(error, 'ProductsService');
     }
   }
 
-  // TODO: pagination
-  async findAll() {
-    try {
-      const products = await this.productRepository.find({});
+  async findAll(paginationDto: PaginationDto) {
+    const { limit = 10, page = 1 } = paginationDto;
 
-      return products;
+    try {
+      const [total, products] = await Promise.all([
+        await this.productRepository.count(),
+        await this.productRepository.find({
+          take: limit,
+          skip: (page - 1) * limit,
+          // TODO: relaciones
+        }),
+      ]);
+
+      const maxPages = Math.ceil(total / limit);
+
+      return {
+        currentPage: page,
+        maxPages,
+        limit,
+        total,
+        next:
+          page + 1 <= maxPages
+            ? `/api/products?page=${page + 1}&limit=${limit}`
+            : null,
+        prev:
+          page - 1 > 0 ? `/api/products?page=${page - 1}&limit=${limit}` : null,
+        products,
+      };
     } catch (error) {
-      this.handleDBError(error);
+      this.errorHandler.handleError(error, this.logger);
     }
   }
 
-  async findOne(id: string) {
-    try {
-      const product = await this.productRepository.findOneBy({ id });
+  async findOne(term: string) {
+    let product: Product;
 
-      if (!product) throw `Product with id ${id} not found`;
+    try {
+      if (isUUID(term))
+        product = await this.productRepository.findOneBy({ id: term });
+
+      if (!isUUID(term))
+        product = await this.productRepository.findOneBy({ slug: term });
+
+      if (!product)
+        throw `Product with ${isUUID(term) ? 'id' : 'slug'} ${term} not found`;
 
       return product;
     } catch (error) {
-      this.handleDBError(error);
+      this.errorHandler.handleError(error, this.logger);
     }
   }
 
@@ -64,17 +89,7 @@ export class ProductsService {
 
       if (res.affected === 0) throw `Product with id ${id} not found`;
     } catch (error) {
-      this.handleDBError(error);
+      this.errorHandler.handleError(error, this.logger);
     }
-  }
-
-  private handleDBError(error: any) {
-    if (error.includes('not found')) throw new NotFoundException(error);
-    if (error.code === '23505') throw new BadRequestException(error.detail);
-
-    this.logger.error(error);
-    throw new InternalServerErrorException(
-      'Unexpected error, check server logs',
-    );
   }
 }
