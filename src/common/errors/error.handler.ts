@@ -8,13 +8,15 @@ import {
 
 @Injectable()
 export class ErrorHandler {
-  public handleError = (error: any, name: string) => {
-    const logger = new Logger(name);
+  public name: string = '';
+
+  public handleError = (error: any) => {
+    const logger = new Logger(this.name);
+
+    logger.error(error);
 
     if (error.includes('not found')) throw new NotFoundException(error);
     if (error.code === '23505') throw new BadRequestException(error.detail);
-
-    logger.error(error);
 
     throw new InternalServerErrorException(
       'Unexpected error, check server logs',

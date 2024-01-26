@@ -14,7 +14,9 @@ export class ProductsService {
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
     private readonly errorHandler: ErrorHandler,
-  ) {}
+  ) {
+    this.errorHandler.name = 'ProductsService';
+  }
 
   async create(createProductDto: CreateProductDto) {
     try {
@@ -23,7 +25,7 @@ export class ProductsService {
 
       return product;
     } catch (error) {
-      this.errorHandler.handleError(error, 'ProductsService');
+      this.errorHandler.handleError(error);
     }
   }
 
@@ -56,7 +58,7 @@ export class ProductsService {
         products,
       };
     } catch (error) {
-      this.errorHandler.handleError(error, this.logger);
+      this.errorHandler.handleError(error);
     }
   }
 
@@ -75,7 +77,7 @@ export class ProductsService {
 
       return product;
     } catch (error) {
-      this.errorHandler.handleError(error, this.logger);
+      this.errorHandler.handleError(error);
     }
   }
 
@@ -89,7 +91,7 @@ export class ProductsService {
 
       if (res.affected === 0) throw `Product with id ${id} not found`;
     } catch (error) {
-      this.errorHandler.handleError(error, this.logger);
+      this.errorHandler.handleError(error);
     }
   }
 }
