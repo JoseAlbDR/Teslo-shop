@@ -31,6 +31,7 @@ export class ProductsService {
     }
   }
 
+  // TODO: pagination
   async findAll() {
     try {
       const products = await this.productRepository.find({});
@@ -39,11 +40,18 @@ export class ProductsService {
     } catch (error) {
       this.handleDBError(error);
     }
-    return `This action returns all products`;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} product`;
+  async findOne(id: string) {
+    try {
+      const product = await this.productRepository.findOneBy({ id });
+
+      if (!product) throw `Product with id ${id} not found`;
+
+      return product;
+    } catch (error) {
+      this.handleDBError(error);
+    }
   }
 
   update(id: number, updateProductDto: UpdateProductDto) {
@@ -53,7 +61,8 @@ export class ProductsService {
   async remove(id: string) {
     try {
       const res = await this.productRepository.delete(id);
-      if (res.affected === 0) throw 'Product not found';
+
+      if (res.affected === 0) throw `Product with id ${id} not found`;
     } catch (error) {
       this.handleDBError(error);
     }
