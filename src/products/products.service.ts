@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -30,7 +31,14 @@ export class ProductsService {
     }
   }
 
-  findAll() {
+  async findAll() {
+    try {
+      const products = await this.productRepository.find({});
+
+      return products;
+    } catch (error) {
+      this.handleDBError(error);
+    }
     return `This action returns all products`;
   }
 
@@ -42,11 +50,17 @@ export class ProductsService {
     return `This action updates a #${id} product`;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} product`;
+  async remove(id: string) {
+    try {
+      const res = await this.productRepository.delete(id);
+      if (res.affected === 0) throw 'Product not found';
+    } catch (error) {
+      this.handleDBError(error);
+    }
   }
 
   private handleDBError(error: any) {
+    if (error.includes('not found')) throw new NotFoundException(error);
     if (error.code === '23505') throw new BadRequestException(error.detail);
 
     this.logger.error(error);
