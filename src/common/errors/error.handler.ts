@@ -10,7 +10,7 @@ import {
 export class ErrorHandler {
   public name: string = '';
 
-  public handleError = (error: any) => {
+  public handle = (error: any) => {
     console.log(error.code);
 
     const logger = new Logger(this.name);

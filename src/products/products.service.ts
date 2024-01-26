@@ -25,7 +25,7 @@ export class ProductsService {
 
       return product;
     } catch (error) {
-      this.errorHandler.handleError(error);
+      this.errorHandler.handle(error);
     }
   }
 
@@ -58,7 +58,7 @@ export class ProductsService {
         products,
       };
     } catch (error) {
-      this.errorHandler.handleError(error);
+      this.errorHandler.handle(error);
     }
   }
 
@@ -84,7 +84,7 @@ export class ProductsService {
 
       return product;
     } catch (error) {
-      this.errorHandler.handleError(error);
+      this.errorHandler.handle(error);
     }
   }
 
@@ -99,7 +99,7 @@ export class ProductsService {
 
       return await this.productRepository.save(product);
     } catch (error) {
-      this.errorHandler.handleError(error);
+      this.errorHandler.handle(error);
     }
   }
 
@@ -109,7 +109,7 @@ export class ProductsService {
 
       if (res.affected === 0) throw `Product with id ${id} not found`;
     } catch (error) {
-      this.errorHandler.handleError(error);
+      this.errorHandler.handle(error);
     }
   }
 }
