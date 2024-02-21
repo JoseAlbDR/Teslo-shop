@@ -1,29 +1,42 @@
 import { Injectable } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { Product } from './entities/product.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { PaginationDto } from 'src/common/dtos/pagination.dto';
 import { validate as isUUID } from 'uuid';
 import { ErrorHandler } from 'src/common/errors/error.handler';
+import { ProductImage, Product } from './entities';
 
 @Injectable()
 export class ProductsService {
   constructor(
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
-    private readonly errorHandler: ErrorHandler,
+
+    @InjectRepository(ProductImage)
+    private productImageRepository: Repository<ProductImage>,
+
+    private readonly dataSource: DataSource,
+
+    private errorHandler: ErrorHandler,
   ) {
     this.errorHandler.name = 'ProductsService';
   }
 
   async create(createProductDto: CreateProductDto) {
     try {
-      const product = this.productRepository.create(createProductDto);
+      const { images = [], ...productDetails } = createProductDto;
+
+      const product = this.productRepository.create({
+        ...productDetails,
+        images: images.map((image) =>
+          this.productImageRepository.create({ url: image }),
+        ),
+      });
       await this.productRepository.save(product);
 
-      return product;
+      return { ...product, images };
     } catch (error) {
       this.errorHandler.handle(error);
     }
@@ -38,7 +51,9 @@ export class ProductsService {
         await this.productRepository.find({
           take: limit,
           skip: (page - 1) * limit,
-          // TODO: relaciones
+          relations: {
+            images: true,
+          },
         }),
       ]);
 
@@ -55,7 +70,10 @@ export class ProductsService {
             : null,
         prev:
           page - 1 > 0 ? `/api/products?page=${page - 1}&limit=${limit}` : null,
-        products,
+        products: products.map((product) => ({
+          ...product,
+          images: product.images.map((img) => img.url),
+        })),
       };
     } catch (error) {
       this.errorHandler.handle(error);
@@ -70,12 +88,13 @@ export class ProductsService {
         product = await this.productRepository.findOneBy({ id: term });
 
       if (!isUUID(term)) {
-        const queryBuilder = this.productRepository.createQueryBuilder();
+        const queryBuilder = this.productRepository.createQueryBuilder('prod');
         product = await queryBuilder
           .where(`LOWER(title) = :title or LOWER(slug) = :slug`, {
             title: term.toLowerCase(),
             slug: term.toLowerCase(),
           })
+          .leftJoinAndSelect('prod.images', 'prodImages')
           .getOne();
       }
 
@@ -88,17 +107,48 @@ export class ProductsService {
     }
   }
 
+  async findOnePlain(term: string) {
+    const { images, ...rest } = await this.findOne(term);
+
+    return {
+      ...rest,
+      images: images.map((image) => image.url),
+    };
+  }
+
   async update(id: string, updateProductDto: UpdateProductDto) {
+    const { images, ...rest } = updateProductDto;
+    const queryRunner = this.dataSource.createQueryRunner();
+
     try {
       const product = await this.productRepository.preload({
-        id: id,
-        ...updateProductDto,
+        id,
+        ...rest,
       });
 
       if (!product) throw `Product with id: ${id} not found`;
 
-      return await this.productRepository.save(product);
+      // Create query runner
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      // Foreign key productId in ProductImages with id that is product id
+      if (images) {
+        await queryRunner.manager.delete(ProductImage, { product: { id: id } });
+
+        product.images = images.map((image) =>
+          this.productImageRepository.create({ url: image }),
+        );
+      }
+
+      await queryRunner.manager.save(product);
+      await queryRunner.commitTransaction();
+      await queryRunner.release();
+
+      return this.findOnePlain(id);
     } catch (error) {
+      await queryRunner.rollbackTransaction();
+      await queryRunner.release();
       this.errorHandler.handle(error);
     }
   }
@@ -111,5 +161,9 @@ export class ProductsService {
     } catch (error) {
       this.errorHandler.handle(error);
     }
+  }
+
+  async deleteAllProducts() {
+    const query = this.productImageRepository.createQueryBuilder('product');
   }
 }

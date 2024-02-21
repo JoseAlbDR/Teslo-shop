@@ -1,4 +1,5 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Product } from './product.entity';
 
 @Entity()
 export class ProductImage {
@@ -7,4 +8,10 @@ export class ProductImage {
 
   @Column('text')
   url: string;
+
+  // CASCADE delete when a product is deleted
+  @ManyToOne(() => Product, (product) => product.images, {
+    onDelete: 'CASCADE',
+  })
+  product: Product;
 }
